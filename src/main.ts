@@ -1,60 +1,47 @@
-
-import express,{ Application } from "express"
-import { Client } from 'pg';
+import express, { Application,Response,Request } from "express";
+import { Client } from "pg";
 
 const app: Application = express();
 
-const PORT: number = 666
+const PORT: number = 666;
 
-app.use(express.json())
-
-
+app.use(express.json());
 
 // Configuración de la base de datos
 const client = new Client({
-    host: 'localhost',
-    database: 'db_taxis_1',
-    user: 'root2',
-    password: 'root2'
-  });
-  
-  // Middleware para parsear JSON
-  app.use(express.json());
-  
-  // Conectar a la base de datos
-  client.connect()
-    .then(() => console.log('Conectado a la base de datos 👽'))
-    .catch(err => console.error('Error al conectar a la base de datos', err));
-  
-    // app.get('/greet', (req: Request, res: Response) => {
-    //   res.send('Greetings!');
-    // });
+  host: "localhost",
+  database: "db_taxis_1",
+  user: "root2",
+  password: "root2",
+});
 
-    app.get('/taxis', (req: Request, res: Response) => {
-      // client.query('SELECT * FROM taxis t JOIN trajectories tr ON t.id = tr.taxi_id WHERE t.id = 10133; ')
-      client.query('SELECT * FROM taxis')
-      .then( result => res.json(result.rows))
-      .catch(err => res.status(500).send('Error en el servidor'))
-    });
-    
+// Middleware para parsear JSON
+app.use(express.json());
+
+// Conectar a la base de datos
+client
+  .connect()
+  .then(() => console.log("Conectado a la base de datos 👽"))
+  .catch((err) => console.error("Error al conectar a la base de datos", err));
+
+// MOStrar los 10 registros y con paginacion 
 
 
-    
+app.get("/taxis", (req: Request, res: Response) => {
 
-// // Endpoint para obtener trayectorias con ID entre 10 y 20
-// app.get('/trajectories', (req: Request, res: Response) => {
-//   client.query('SELECT id, taxi_id FROM trajectories WHERE id > 15 AND id < 20')
-//       .then(result => {
-//         res.json(result.rows); // Envía los resultados como JSON
-//         console.log(res.json(result.rows)); // Agrega esto para ver los resultados en la consola
-//       })      
-//       .catch(err => {
-//           console.error('Error ejecutando la consulta', err);
-//           res.status(500).send('Error en el servidor'); // Envía un error 500 en caso de fallo
-//       });
-// });
+  const pageParam = parseInt(req.query.page as string) || 1; // Página actual, por defecto 1
+  const limitParam = parseInt(req.query.limit as string) || 10; // Registros por página, por defecto 10
+ 
+  client
+    .query(`SELECT * FROM taxis ORDER BY id LIMIT ${limitParam} OFFSET (${pageParam} - 1) * 10;`)
+    .then((result) => res.json(result.rows))
+    .catch((err) => res.status(500).send("Error en el servidor"));
+});
 
-// Iniciar el servidor
+
+
+
+
 app.listen(PORT, () => {
   console.log(`Servidor en funcionamiento en el puerto ${PORT}`);
 });
