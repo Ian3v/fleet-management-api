@@ -73,7 +73,9 @@ app.get(  "/trajectories", async(req:Request, res:Response) => {
 
   const taxiid = parseInt(req.query.taxiId as string);
   let date = req.query.date as string;
+
   
+
   // Fecha y formato
   if (date && date.includes('-')) {
     const parts = date.split('-');
@@ -81,13 +83,24 @@ app.get(  "/trajectories", async(req:Request, res:Response) => {
     let yy = parseInt( parts[2])
     let mm = parseInt( parts[1])
     let dd = parseInt( parts[0])
+    
+    // if(typeof( yy) !== 'number' || typeof( mm) !== 'number' || typeof( dd) !== 'number' ){
+    //   return res.status(400).json({ message: 'responds with 400 if date badly formatted' });
+    // }
+    console.log('???????????????????', typeof(yy), yy,' ',typeof( mm),mm,' ',typeof( dd),dd);
 
-    console.log('???????????????????', typeof(yy),' ',typeof( mm),' ',typeof( dd));
-
-    if (parts[2].length === 4) {
+    if(yy > 0 && mm > 0 && dd > 0 ){
+      console.log(dd, 'sies un number');
+      if (parts[2].length === 4) {
         // Formato DD-MM-YYYY detectado
         date = `${parts[2]}-${parts[1]}-${parts[0]}`;  // Convertimos a YYYY-MM-DD
     }
+    }else{
+      return res.status(400).json({ message: 'responds with 400 if date badly formatted' });
+ 
+    }
+
+    
   }
   
   // let query = `SELECT * FROM trajectories WHERE taxi_id = ${taxiid} AND DATE(date) = '2008-02-02'`
@@ -133,6 +146,31 @@ app.get(  "/trajectories", async(req:Request, res:Response) => {
   }
   }
 )
+
+app.get( "/trajectories/latest", async (req:Request, res: Response) => {
+
+  let query = `SELECT * FROM trajectories LIMIT 1`
+  const requiredProperties = ['taxiId', 'plate', 'timestamp', 'latitude', 'longitude'];
+
+  try{
+    const result = await client.query(query) 
+    const data = result.rows
+    console.log(typeof( data));
+    res.json(result.rows)
+
+    // console.log(data[0].);
+    Object.keys(data[0]).forEach( e =>{
+      console.log('<<<<<<',e);
+
+    })
+    
+   
+  }catch(err){
+    console.error('Error en el servidor:', err);
+    res.status(500).send("Error en el servidor"); // Manejo de errores
+  }  
+
+})
 
 
 app.listen(PORT, () => {
