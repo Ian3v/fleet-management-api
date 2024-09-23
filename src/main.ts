@@ -102,9 +102,9 @@ app.get(  "/trajectories", async(req:Request, res:Response) => {
     
     query = `SELECT * FROM trajectories WHERE taxi_id = ${taxiid} AND DATE(date) = '${date}'`
   }
-  console.log('>>>>>> taxiid', taxiid);
-  console.log('>>>>>> date', date);
-  console.log('query', query);
+  // console.log('>>>>>> taxiid', taxiid);
+  // console.log('>>>>>> date', date);
+  // console.log('query', query);
 
   try{
     const result = await client.query(query)
@@ -127,7 +127,6 @@ app.get(  "/trajectories", async(req:Request, res:Response) => {
       })
       res.json(resultFinal); 
     }
-
   }catch(err) {
     console.error('Error en el servidor:', err);
     res.status(500).send("Error en el servidor"); // Manejo de errores
