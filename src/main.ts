@@ -1,11 +1,21 @@
+/* -------------------------------------------------------------------------- */
+//El Front se encuentra en   Front React/1 Curso FreeCodeCamp/ 2 testimonios Freecodecamp
+/* -------------------------------------------------------------------------- */
+
 import { timeStamp } from "console";
-import e from "express";
+import e, { response } from "express";
 import express, { Application, Response, Request } from "express";
 import { Client } from "pg";
 import * as bcrypt from "bcrypt";
 import { parse } from "path";
+import { request } from "http";
+import { PassThrough } from "stream";
+import { hasSubscribers } from "diagnostics_channel";
 
 const app: Application = express();
+
+const personajes = ["ra", "re"];
+const [ra] = personajes;
 
 const PORT: number = 666;
 
@@ -210,167 +220,340 @@ app.get("/trajectories/latest", async (req: Request, res: Response) => {
   }
 });
 
-// USERS
 app.get("/users", async (req: Request, res: Response) => {
-  let limit = req.query.limit;
-  // let page = parseInt(req.query.page as string);
-  let page = req.query.page as string;
-  let query: string = "";
-  // page === undefined || page === null
-  console.log("#### Page ", page);
-  console.log("#### limit", limit);
+  const { page = 1, limit = 10 } = req.query;
+  const pageInt = parseInt(page as string, 10);
+  const limitInt = parseInt(limit as string, 10);
 
-  if (limit || page) {
-    //! Si exite alguno de estos
-    console.log(">>> page", page);
-    console.log(">>> limit ", limit);
-
-    if (limit && !page) {
-      //? Si pasa el if Me dara el resultado limite de 5
-      if (!isNaN(limit) || limit > 0) {
-        // limte es diferente de NaN o es mayor q 0
-        query = `SELECT * FROM users
-        ORDER  BY id LIMIT ${limit} OFFSET (1 - 1) * 10`;
-        console.log("if paso >>> ", query);
-        try {
-          const result = await client.query(query);
-          res.json(result.rows);
-        } catch (err) {
-          console.error("Error :", err);
-        }
-      } else {
-        console.log("if NO PASO");
-        return res.status(400).json({ error: "Invalid page LIMIT." });
-      }
-    }
-
-    if (page && !limit) {
-      console.log(">>> Hay PAge");
-      let parsearPage = parseInt(page);
-      if (isNaN(page)) {
-        console.log("page es no un numero");
-        return res.status(400).json({ error: "Invalid page page." });
-      } else {
-        query = `SELECT * FROM users
-        ORDER  BY id LIMIT 10 OFFSET (${page} - 1) * 10`;
-        console.log("else ocn page>>>", query);
-        try {
-          const result = await client.query(query);
-          res.json(result.rows);
-        } catch (err) {
-          console.error("Error :", err);
-        }
-      }
-    }
-  } else {
-    try {
-      query = `SELECT * FROM users LIMIT 10`;
-      console.log("#### ELSE");
-      const result = await client.query(query);
-      res.json(result.rows);
-    } catch (err) {
-      console.error("Error :", err);
-    }
+  if (isNaN(pageInt) || pageInt < 1) {
+    return res.status(400).json({ error: "Invalid page" });
   }
-});
+  if (isNaN(limitInt) || limitInt < 1) {
+    return res.status(400).json({ error: "Invalid lmit" });
+  }
 
-//INSERTAR USUARIOS
-const insertUser = async (name: string, email: string, password: string) => {
-  const saltRounds = 10;
-
+  let query = `SELECT * FROM users LIMIT ${limitInt}`;
   try {
-    //Hasheamos la contrasenia usando bccrypt
-
-    const hashPassword = await bcrypt.hash(password, saltRounds);
-    console.log(">> ", password);
-    console.log(">> ", hashPassword);
-    //Insertar usuario
-    const query = `INSERT INTO users (name, email, password) 
-    VALUES ('${name}', '${email}', '${hashPassword}');`;
-    console.log(">> ", query);
-    return query;
+    //  query = `SELECT * FROM users LIMIT ${limitInt}`;
+    console.log("#### ELSE \n > ", query);
+    const result = await client.query(query);
+    res.json(result.rows);
   } catch (err) {
     console.error("Error :", err);
   }
-};
+});
 
-// POST
-app.post("/users", async (req: Request, res: Response) => {
-  const { email, name, password } = req.body;
-  console.log("POST /users", { email, name, password });
 
-  // Validación simple
+
+/* -------------------------------------------------------------------------- */
+/* -------------------------------------------------------------------------- */
+// Codigo para q funcione el POST dos partes el async y app.use
+
+
+// async () => {
+//   //Esperar q el servidor este listo
+//   app.listen(666, async () => {
+//     console.log("Servidor ejecutandose 666");
+//   });
+
+//   //Simulamos la solicutd post
+//   console.log("Simulando la solictud POST");
+//   try {
+//     const response = await fetch("http://localhost:666/users", {
+//       method: "POST",
+//       headers: {
+//         "Content-Type": "applicaction/json",
+//       },
+//       // ,
+//       // body: JSON.stringify({
+//       //   name: 'unoFetch',
+//       //   email: "unoFetch@mail.com",
+//       //   password: "unoFetchPassword"
+//       // }),
+//     });
+//     const data = await response.json();
+//     console.log("Repsuesta del servidor,", data);
+//   } catch (error) {
+//     console.log("Error durante la simulacion", error);
+//   }
+  
+// };
+// app.use(express.urlencoded({ extended: true }));
+/* -------------------------------------------------------------------------- */
+
+
+//* -------------------------------------------------------------------------- */
+//* -------------------------------------------------------------------------- */
+//* POST
+
+
+app.post('/users', async (req:Request, res:Response)=>{
+
+  //Capturamos los datos del body
+  const { email, name, password} = req.body;
+
+  //* >------------------------------------------------------------------------- */
+  //* * * * 3 Post users - missing params (email) AND 4 missing password
   if (!email || !name || !password) {
+    return res.status(400).json({ error: 'Es necesario datos como email' });
+  }
+  //* -------------------------------------------------------------------------< */
+
+  //Verificar si el usuario ya existe
+  const checkQuery = `SELECT * FROM users WHERE email = '${email}' OR name = '${name}';`;
+
+  try {
+    const checkResult = await client.query(checkQuery);
+
+    //* >------------------------------------------------------------------------- */
+    //* * * * 2 Post users users existe
+    if (checkResult.rows.length > 0) {
+      console.log(`>---------------------------------------------\n 
+        POST /users  Ya existe users ${email}, ${name}\nPOST /checket `, checkResult.rows[0], 
+        "\n-------------------------------------<");
+      
+        return res.status(409).json({ error: `El usuario ya EXISTE ${email}, ${name}` });
+    }
+    //* -------------------------------------------------------------------------< */
+    
+
+    //* >------------------------------------------------------------------------- */
+    //* * * * 1 Post users, donde se crea el usuario si es q no existe  {Grace Hopper, newUser@test.com}, El error q se encontraba esta en el test CREATED -> Created
+    const query = `INSERT INTO users (name, email, password)
+               VALUES ('${name}', '${email}', '${password}')
+               RETURNING id, name, email;`;
+
+      const result = await client.query(query);
+      console.log("\n 1 POST >>-----------------------------------------\n Usuario No existe Ya insertado:", result.rows[0]), "\n-------------------------------<<\n";
+      res.status(201).json(result.rows[0]);
+    //* -------------------------------------------------------------------------< */
+
+  }catch(err){
+    console.log("❌ Error en el servidor", err);
+    res.status(500).json({ error: "Error en el servidor" });
+  }
+
+})
+// * -------------------------------------------------------------------------- */
+// * -------------------------------------------------------------------------- */
+
+
+
+
+
+//* -------------------------------------------------------------------------- */
+//* -------------------------------------------------------------------------- */
+//* * * * PATCH
+app.patch("/users/:id", async (req: Request, res: Response) => {
+  // console.log("> users/:id ", req.params.id);
+  const userId = req.params.id; // el Id del usario q actualizaremos
+  const { name, email } = req.body; // Campos que deseas actualizar
+  console.log(">>> 1 PATCH recuperando body", req.body);
+
+  //Enviar un id valido
+  if (!userId || isNaN(Number(userId))) {
+    return res.status(400).json({
+      error: "El ID del Usuario es obligatorio y debe ser un numero valido",
+    });
+  }
+
+  //* -------------------------------------------------------------------------- */
+  //* 3 PATCH users - no body ✅
+  if (!req.body || Object.keys(req.body).length === 0) {
+    console.log('Cuerpo de la solicitud ausente o vacío');
+    return res.status(400).json({ error: "El cuerpo de la solicitud está vacío. Se necesita al menos un campo para actualizar: name o email." });
+  }
+  //* -------------------------------------------------------------------------- */
+
+  let query = "";
+
+  // Si name y email no estan 
+  if (!name && !email) {
     return res
       .status(400)
       .json({
-        error: "Todos los campos son obligatorios: name, email, password",
+        error: "Se necesita al menos un campo para actualizar: name o email",
       });
   }
+  // Si los estan, entonces query actilizara los dos
+  if (name && email) {  
+    query = `UPDATE users SET name= '${name}', email= '${email}' WHERE id = ${userId}
+    RETURNING id, name, email;`;
+  }
+  //* -------------------------------------------------------------------------- */
+  //* * * * 1 Patch users  - si solo esta el name si se actuliza ✅
+  if (name && !email) {
+    query = `UPDATE users SET name = '${name}' WHERE id = ${userId} 
+    RETURNING id, name, email;`;
+    console.log("> NAME Solo hay name y no hay email");
+    console.log(">query ", query);
+  }
 
-  // Verificar si el usurio ya existe
-  const checkQuery = `SELECT * FROM users WHERE email = '${email}' OR name = '${name}';`;
+  //* -------------------------------------------------------------------------- */
+  //* 4 Patch users - email or password ✅
+  if (!name && email) {
+    return res.status(400).json({ error: "Cannot update email directly" });
+
+  }
+  //* -------------------------------------------------------------------------- */
+
   try {
-    const checkresult = await client.query(checkQuery);
+    const result = await client.query(query);
+    //! If q cuando se envia un id=99999
 
-    if (checkresult.rows.length > 0) {
-      //Usuario ya existe
-      console.log("Ya existe users\n POST /checket ", checkresult.rows[0]);
-      return res.status(409).json({ error: "El usuario ya EXISTE" });
-    } else {
-      //SI no entro al if, entonces no existe
-      const query = `INSERT INTO users (name, email, password)
-              VALUES ('${name}', '${email}', '${password}')
-              RETURNING id, name, email;`;
-
-     
-      const result = await client.query(query);
-      console.log("Usuario insertado:", result.rows[0]);
-      res.status(201).json(result.rows[0]);
+    //* -------------------------------------------------------------------------- */
+    //* 2 Patch users - user does not exit ✅
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: "Usuario no encontrado" }); //TEST SET user does not exit
     }
+    //* -------------------------------------------------------------------------- */
+
+    res.status(200).json(result.rows[0]);
   } catch (err) {
-    console.log("Errir en el servidor", err);
+    console.error("Error en el servidor :", err);
     res.status(500).json({ error: "Error en el servidor" });
   }
 });
+//* -------------------------------------------------------------------------- */
+//* -------------------------------------------------------------------------- */
 
 
-// PATCH
-app.patch("/users/:id", async (req: Request, res: Response) => {
-  const userId = req.params.id; 
-  const { name, email } = req.body; // Campos que deseas actualizar
 
-  console.log('> PATCH users/:id ', userId);
-  console.log('> PATCH users/:id \n name, email ', name, ' ', email);
+//* -------------------------------------------------------------------------- */
+//* -------------------------------------------------------------------------- */
+// ? DELETE sin parametros
 
-  
-  // Verificar que al menos un campo se va a actualizar
-  if (!name && !email) {
-    return res.status(400).json({ error: "Se necesita al menos un campo para actualizar: name o email" });
+app.delete("/users/:identidicador", async (req: Request, res: Response) => {
+  const identidicador = req.params.identidicador;
+  console.log(identidicador);
+
+  if (!identidicador) {
+    console.log("DELETE users, id es necesario apra elimninar alguno");
+    return res
+      .status(400)
+      .json({ eror: "El ID del usuario deebe ser un numero valido" });
   }
 
-  // // Construir la consulta SQL dinámica
-  // const updates = [];
-  // if (name) updates.push(`name = '${name}'`);
-  // if (email) updates.push(`email = '${email}'`);
-  
-  // const updateQuery = `UPDATE users SET ${updates.join(", ")} WHERE id = ${userId} RETURNING id, name, email`;
+  const query = `SELECT * FROM users WHERE id = ${identidicador}`;
+  // console.log('>query ', query);
 
-  // try {
-  //   const result = await client.query(updateQuery);
-  //   if (result.rows.length === 0) {
-  //     return res.status(404).json({ error: "Usuario no encontrado" });
-  //   }
-  //   res.status(200).json(result.rows[0]);
-  // } catch (err) {
-  //   console.error("Error en el servidor:", err);
-  //   res.status(500).json({ error: "Error en el servidor" });
-  // }
+  try {
+    const result = await client.query(query);
+    console.log("> Result Rows = ", result.rowCount);
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: "Usuario no existe" });
+    }
+    //Elimnar usuario
+    const deleteQuery = `DELETE FROM users WHERE id = ${identidicador} RETURNING id, email, name`;
+    console.log(">>Se elimino esta celda Query Delete: ", deleteQuery);
+    const resultToDelete = await client.query(deleteQuery);
+    return res.status(200).json(resultToDelete.rows[0]);
+  } catch (error) {
+    res.status(500).json({ error: "Error en el servidor" });
+  }
 });
+//* -------------------------------------------------------------------------- */
+//* -------------------------------------------------------------------------- */
 
 
 
+
+/* -------------------------------------------------------------------------- */
+// // INSERTAR USUARIOS
+// const insertUser = async (name: string, email: string, password: string) => {
+//   const saltRounds = 10;
+
+//   try {
+//     //Hasheamos la contrasenia usando bccrypt
+
+//     const hashPassword = await bcrypt.hash(password, saltRounds);
+//     console.log(">> ", password);
+//     console.log(">> ", hashPassword);
+//     //Insertar usuario
+//     const query = `INSERT INTO users (name, email, password) 
+//     VALUES ('${name}', '${email}', '${hashPassword}');`;
+//     console.log(">> ", query);
+//     return query;
+//   } catch (err) {
+//     console.error("Error :", err);
+//   }
+// };
+// // insertUser('Uno','uno@gmail.com','unopoassword')
+
+
+// /* -------------------------------------------------------------------------- */
+// /* -------------------------------------------------------------------------- */
+// //Simular el FRONT para enivar los datos en el body y POST capturarlos
+// async () => {
+//   //Esperar q el servidor este listo
+//   app.listen(666, async () => {
+//     console.log("Servidor ejecutandose 666");
+//   });
+
+//   console.log("Simulando la solictud POST");
+//   try {
+//     const response = await fetch("http://localhost:666/usersss", {
+//       method: "POST",
+//       headers: {
+//         "Content-Type": "applicaction/json",
+//       },
+//       // ,
+//       // body: JSON.stringify({
+//       //   name: 'unoFetch',
+//       //   email: "unoFetch@mail.com",
+//       //   password: "unoFetchPassword"
+//       // }),
+//     });
+//     const data = await response.json();
+//     console.log("Repsuesta del servidor,", data);
+//   } catch (error) {
+//     console.log("Error durante la simulacion", error);
+//   }
+
+// };
+
+// app.use(express.urlencoded({ extended: true }));
+
+// /* -------------------------------------------------------------------------- */
+// // /* -------------------------------------------------------------------------- */
+// // app.post("/usersss", async (req: Request, res: Response) => {
+// //   const { email, name, password } = req.body;
+// //   const saltRounds = 10;
+
+// //   console.log(">> New Postcreate usersss :", { email, name, password });
+// //   // Validación simple
+// //   if (!email || !name || !password) {
+// //     return res.status(400).json({
+// //       error: "Todos los campos son obligatorios: name, email, password",
+// //     });
+// //   }
+// //   const hashPass = await bcrypt.hash(password, saltRounds);
+// //   const query = `INSERT INTO users (name, email, password) VALUES ('${name}','${email}', '${hashPass}') RETURNING id, name, email, password`;
+// //   // const query = `INSERT INTO users (name, email, password) VALUES ('${name}','${email}', '${hashPass}') `
+
+// //   console.log(">>> query para insertar usersss", query);
+
+// //   try {
+// //     const result = await client.query(query);
+// //     return res.status(200).json(result.rows[0]);
+// //   } catch (error) {
+// //     res.status(500).json({ error: "Error en el servidor" });
+// //   }
+// // });
+// /* -------------------------------------------------------------------------- */
+
+
+
+
+// Middleware para manejar rutas no existentes
+app.use((req: Request, res: Response) => {
+  res.status(404).json({ error: 'Route not found' });
+});
 
 app.listen(PORT, () => {
   console.log(`Servidor en funcionamiento en el puerto ${PORT}`);
 });
+
+
+// Probando el USERS / POST
+
