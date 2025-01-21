@@ -1,8 +1,9 @@
 /* -------------------------------------------------------------------------- */
-//El Front se encuentra en   Front React/1 Curso FreeCodeCamp/ 2 testimonios Freecodecamp
+//El Front se encuentra en   Front React/1 Curso FreeCodeCamp/ 2 testimonios Freeco decamp
+// Editar newuserId de Post - lo elimnara, a otro
 /* -------------------------------------------------------------------------- */
 
-import { timeStamp } from "console";
+import { time, timeStamp } from "console";
 import e, { response } from "express";
 import express, { Application, Response, Request } from "express";
 import { Client } from "pg";
@@ -12,7 +13,17 @@ import { request } from "http";
 import { PassThrough } from "stream";
 import { hasSubscribers } from "diagnostics_channel";
 
+const { DateTime } = require("luxon");
+
+
+import cors from "cors";
+
+// Permitir CORS para todas las rutas
+
 const app: Application = express();
+
+//! IMPORTANTE - para q Cualqueir fronte q tenga un dominoi diferete al front pueda acceder al aAPI, ose este FROTN corre ejemplo laoclhost:3000 y el back corre en el localhost:666, entonces dominois curzados creo q quiere decir, CROS activa esta solictud q sea seguro acceder desde diferentes dominois, osea le decimos q Esta api puede ser consumida por diferentes dominios
+app.use(cors());
 
 const personajes = ["ra", "re"];
 const [ra] = personajes;
@@ -39,25 +50,46 @@ client
   .catch((err) => console.error("Error al conectar a la base de datos", err));
 
 //? http://localhost:666/taxis?page=1&limit=10
+
+//* -------------------------------------------------------------------------- */
+// * TAXIS GET
+
+//* -------------------------------------------------------------------------- */
 app.get("/taxis", async (req: Request, res: Response) => {
   const limit = parseInt(req.query.limit as string) || 10; // Registros por página, por defecto 10
-  const page = parseInt(req.query.page as string) || 1; // Página actual, por defecto 1
+  const page = parseInt(req.query.page as string) || 0; // Página actual, por defecto 1
   const plate = req.query.plate as string; // Captura el valor de plateParam (si existe)
-
+  console.log("Taxis Get>>>>>---------------------------\n");
   console.log("/taxis limit> ", limit);
   console.log("/taxis page> ", page);
   console.log("/taxis   plate> ", plate);
 
   // const offset = (page - 1)* limit
-  let query = `SELECT * FROM taxis`;
+  let query = `SELECT 
+    ROW_NUMBER() OVER (ORDER BY id) AS global_index,
+    id,
+    plate
+FROM 
+    taxis`;
 
   if (plate) {
     query += ` WHERE plate LIKE '%${plate}%'`; // Filtro por placa
   }
 
-  query += ` ORDER BY id LIMIT ${limit} OFFSET ${page}`;
+  //Aki cambiamos la Paginacion Offset, ya q si es 0, nos mostrara el primer elemento menos el 0, si el offset es 10, enotnces se saltara los 10 primeros elementos y mostrara desde el 11, cuantos elementos mostrara desde el 11, pues segun el limte
+  const offsetPaginacion = (page === 0 ? 0 : page - 1) * limit;
 
-  console.log(">>> ", query);
+  query += ` ORDER BY id LIMIT ${limit} OFFSET ${offsetPaginacion}`;
+
+  // #region TaxisGet Info
+  console.log(">>> ---------------- \n Taxis Get ", query);
+  console.log("limite =", limit, "  tipo de datos =", typeof limit);
+  console.log("page =", page, "  tipo de dato =", typeof page);
+  console.log("PAge El real ps =", offsetPaginacion);
+  console.log(
+    `----\n limite de elemetos a mostrar = ${limit} \n la pagina sera el numero ${page} \n Offset = > ${offsetPaginacion} < Entonces elementos a mostrar sera desde ese numero para arriba, obviando ese numero \n --------`
+  );
+  // #endregion
 
   try {
     const result = await client.query(query);
@@ -67,16 +99,163 @@ app.get("/taxis", async (req: Request, res: Response) => {
     res.status(500).send("Error en el servidor"); // Manejo de errores
   }
 
-  // client
-  //   .query(query)
-  //   .then((result) => res.json(result.rows))
-  //   .catch((err) => {
-  //     console.error("Error en la consulta:", err);
-  //     res.status(500).send("Error en el servidor");
-  //   });
+  console.log("\n---------------------------<<<<<<EndTaxis Get\n");
 });
 
-//? TRAJECTORIES Si o si requiere taxi id y date
+//* -------------------------------------------------------------------------- */
+
+// app.get( "/trajectories", async (req:Request, res:Response)=>{
+//   const taxiid = parseInt(req.query.taxiId as string);
+//   let date = req.query.date as string;
+
+//   // Fecha y formato
+//   if (date && date.includes("-")) {
+//     const parts = date.split("-");
+
+//     let yy = parseInt(parts[2]);
+//     let mm = parseInt(parts[1]);
+//     let dd = parseInt(parts[0]);
+
+//     // if(typeof( yy) !== 'number' || typeof( mm) !== 'number' || typeof( dd) !== 'number' ){
+//     //   return res.status(400).json({ message: 'responds with 400 if date badly formatted' });
+//     // }
+//     console.log(
+//       "???????????????????",
+//       typeof yy,
+//       yy,
+//       " ",
+//       typeof mm,
+//       mm,
+//       " ",
+//       typeof dd,
+//       dd
+//     );
+
+//     if (yy > 0 && mm > 0 && dd > 0) {
+//       console.log(dd, "sies un number");
+//       if (parts[2].length === 4) {
+//         // Formato DD-MM-YYYY detectado
+//         date = `${parts[2]}-${parts[1]}-${parts[0]}`; // Convertimos a YYYY-MM-DD
+//       }
+//     } else {
+//       return res
+//         .status(400)
+//         .json({ message: "responds with 400 if date badly formatted" });
+//     }
+//   }
+
+//  if (!taxiid && !date) {
+//          let query = `WITH LatestData AS (
+//                    SELECT
+//                        taxis.id,
+//                        taxis.plate,
+//                        trajectories.latitude,
+//                        trajectories.longitude,
+//                        trajectories.date,
+//                        ROW_NUMBER() OVER (PARTITION BY taxis.plate ORDER BY trajectories.date DESC) AS rn
+//                    FROM taxis
+//                    INNER JOIN trajectories ON taxis.id = trajectories.taxi_Id
+//                    )
+//                    SELECT id, plate, latitude, longitude, date
+//                    FROM LatestData
+//                    WHERE rn = 1;`;
+//    const requiredProperties = [
+//      "taxiId",
+//      "plate",
+//      "timestamp",
+//      "latitude",
+//      "longitude",
+//    ];
+
+//    try {
+//      const result = await client.query(query);
+//       console.log(result.rows);
+//      const data = result.rows;
+//       console.log( data);
+//       res.json(result.rows)
+
+//       // console.log(data[0].);
+//      const resultFinal = data.map((i) => {
+//        return {
+//          taxiId: i.id,
+//          plate: i.plate,
+//          timestamp: i.date,
+//          latitude: i.latitude,
+//          longitude: i.longitude,
+//        };
+//      });
+
+//      console.log(resultFinal);
+//      res.json(resultFinal);
+//    } catch (err) {
+//      console.error("Error en el servidor:", err);
+//      res.status(500).send("Error en el servidor"); // Manejo de errores
+//    }
+//     }
+
+//   // let query = `SELECT * FROM trajectories WHERE taxi_id = ${taxiid} AND DATE(date) = '2008-02-02'`
+//   let query = "";
+//   if (!taxiid) {
+//     return res.status(400).json({
+//       message: 'responds with 400 for missing required parameters (taxiId)"',
+//     });
+//   }
+//   if (!date) {
+//     return res
+//       .status(400)
+//       .json({ message: "Missing required parameter: date" });
+//   } else {
+//     // query = `SELECT * FROM trajectories WHERE taxi_id = ${taxiid} AND DATE(date) = '${date}'`;
+//     // query = `SELECT *, date AT TIME ZONE 'UTC' AS date utc FROM trajectories WHERE taxi_id =  ${taxiid} AND DATE(date) = ${date}`
+//     query = `SELECT *, date AT TIME ZONE 'UTC'
+//             AS date_utc
+//             FROM trajectories
+//             WHERE taxi_id = ${taxiid}
+//             AND DATE(date AT TIME ZONE 'UTC') = '${date}';`;
+
+//     console.log(">> ", query);
+//   }
+//   // console.log('>>>>>> taxiid', taxiid);
+//   // console.log('>>>>>> date', date);
+//   // console.log('query', query);
+
+//   try {
+//     const result = await client.query(query);
+//     const resultRows = result.rows;
+
+//     console.log(
+//       ">>>>> Numeros de resultados de la consulta",
+//       resultRows.length
+//     );
+//     if (resultRows.length <= 0) {
+//       return res.status(404).json({ message: "Taxi not found" });
+//     } else {
+//       const resultFinal = resultRows.map((i) => {
+//         return {
+//           taxiId: i.taxi_id,
+//           plate: i.plate,
+//           timestamp: i.date,
+//           latitude: i.latitude,
+//           longitude: i.longitude,
+//         };
+//       });
+//       res.json(resultFinal);
+//     }
+//   } catch (err) {
+//     console.error("Error en el servidor:", err);
+//     res.status(500).send("Error en el servidor"); // Manejo de errores
+//   }
+// })
+// // Ruta alias para "/trajectories/latest"
+// app.get("/trajectories/latest", async (req, res) => {
+//   // Redirige internamente a "/trajectories" sin parámetros
+//   req.query = {}; // Asegúrate de que no haya parámetros
+//   app._router.handle(req, res);
+// });
+
+// //* -------------------------------------------------------------------------- */
+// //? TRAJECTORIES Si o si requiere taxi id y date
+// //* -------------------------------------------------------------------------- */
 app.get("/trajectories", async (req: Request, res: Response) => {
   const taxiid = parseInt(req.query.taxiId as string);
   let date = req.query.date as string;
@@ -129,13 +308,32 @@ app.get("/trajectories", async (req: Request, res: Response) => {
       .status(400)
       .json({ message: "Missing required parameter: date" });
   } else {
-    // query = `SELECT * FROM trajectories WHERE taxi_id = ${taxiid} AND DATE(date) = '${date}'`;
-    // query = `SELECT *, date AT TIME ZONE 'UTC' AS date utc FROM trajectories WHERE taxi_id =  ${taxiid} AND DATE(date) = ${date}`
-    query = `SELECT *, date AT TIME ZONE 'UTC' 
-            AS date_utc 
-            FROM trajectories 
-            WHERE taxi_id = ${taxiid} 
-            AND DATE(date AT TIME ZONE 'UTC') = '${date}';`;
+    
+    // #region query con paginacion
+    //     query = `SELECT 
+    //     ROW_NUMBER() OVER (ORDER BY id) AS global_index, 
+    //     *,
+    //     date AT TIME ZONE 'UTC' AS date_utc 
+    // FROM 
+    //     trajectories 
+    // WHERE 
+    //     taxi_id = ${taxiid}
+    //     AND DATE(date AT TIME ZONE 'UTC') = '${date}'
+    // ORDER BY 
+    //     id 
+    // LIMIT 10 OFFSET 10;
+    // `;
+    // #endregion
+
+    query = `SELECT 
+         ROW_NUMBER() OVER (ORDER BY id) AS global_index, 
+         *, date AT TIME ZONE 'UTC'
+            AS date_utc
+            FROM trajectories
+            WHERE taxi_id = ${taxiid}
+            AND DATE(date AT TIME ZONE 'UTC') = '${date}'
+            ORDER BY id
+            `;
 
     console.log(">> ", query);
   }
@@ -154,11 +352,22 @@ app.get("/trajectories", async (req: Request, res: Response) => {
     if (resultRows.length <= 0) {
       return res.status(404).json({ message: "Taxi not found" });
     } else {
+      
       const resultFinal = resultRows.map((i) => {
+        const utcDate = DateTime.fromISO(i.date.toISOString());
+        if (!utcDate.isValid) {
+          console.error('Fecha inválida:', i.date);
+          return; // Salir si la fecha no es válida
+        }
+        const localDate = utcDate.setZone('America/Lima');
+        // console.log('>>>> i.date', i.date);
+        // console.log('Convert', localDate.toString())
         return {
+          global_index:i.global_index,
           taxiId: i.taxi_id,
           plate: i.plate,
-          timestamp: i.date,
+          // timestamp: i.date ,
+          timestamp: localDate.toString() ,
           latitude: i.latitude,
           longitude: i.longitude,
         };
@@ -220,19 +429,38 @@ app.get("/trajectories/latest", async (req: Request, res: Response) => {
   }
 });
 
-app.get("/users", async (req: Request, res: Response) => {
-  const { page = 1, limit = 10 } = req.query;
-  const pageInt = parseInt(page as string, 10);
-  const limitInt = parseInt(limit as string, 10);
+//* -------------------------------------------------------------------------- */
 
-  if (isNaN(pageInt) || pageInt < 1) {
+
+
+
+
+
+
+
+//* -------------------------------------------------------------------------- */
+//* USERS GER
+//* -------------------------------------------------------------------------- */
+
+
+app.get("/users", async (req: Request, res: Response) => {
+  // const { page = 1, limit = 10 } = req.query;
+  const limit = req.query.limit || 10;
+  const page = req.query.page || 0
+  const pageInt = parseInt(page as string, 0);
+  const limitInt = parseInt(limit as string, 10);
+  // const offsetPaginacion = (page === 0 ? 0 : page - 1) * limit;
+
+  if (isNaN(pageInt) || pageInt < 0) {
     return res.status(400).json({ error: "Invalid page" });
   }
   if (isNaN(limitInt) || limitInt < 1) {
     return res.status(400).json({ error: "Invalid lmit" });
   }
 
-  let query = `SELECT * FROM users LIMIT ${limitInt}`;
+  const offsetPaginacion = (page === 0 ? 0 : page - 1) * limitInt;
+
+  let query = `SELECT ROW_NUMBER() OVER (ORDER BY id) AS global_index, * FROM users LIMIT ${limitInt} OFFSET ${offsetPaginacion}`;
   try {
     //  query = `SELECT * FROM users LIMIT ${limitInt}`;
     console.log("#### ELSE \n > ", query);
@@ -240,15 +468,17 @@ app.get("/users", async (req: Request, res: Response) => {
     res.json(result.rows);
   } catch (err) {
     console.error("Error :", err);
+    
   }
 });
+//* -------------------------------------------------------------------------- */
+
 
 
 
 /* -------------------------------------------------------------------------- */
 /* -------------------------------------------------------------------------- */
 // Codigo para q funcione el POST dos partes el async y app.use
-
 
 // async () => {
 //   //Esperar q el servidor este listo
@@ -276,26 +506,25 @@ app.get("/users", async (req: Request, res: Response) => {
 //   } catch (error) {
 //     console.log("Error durante la simulacion", error);
 //   }
-  
+
 // };
 // app.use(express.urlencoded({ extended: true }));
 /* -------------------------------------------------------------------------- */
 
 
+
 //* -------------------------------------------------------------------------- */
+//TODO Agregar encruptacion al password
 //* -------------------------------------------------------------------------- */
 //* POST
-
-
-app.post('/users', async (req:Request, res:Response)=>{
-
+app.post("/users", async (req: Request, res: Response) => {
   //Capturamos los datos del body
-  const { email, name, password} = req.body;
+  const { email, name, password } = req.body;
 
   //* >------------------------------------------------------------------------- */
   //* * * * 3 Post users - missing params (email) AND 4 missing password
   if (!email || !name || !password) {
-    return res.status(400).json({ error: 'Es necesario datos como email' });
+    return res.status(400).json({ error: "Es necesario datos como email" });
   }
   //* -------------------------------------------------------------------------< */
 
@@ -308,14 +537,18 @@ app.post('/users', async (req:Request, res:Response)=>{
     //* >------------------------------------------------------------------------- */
     //* * * * 2 Post users users existe
     if (checkResult.rows.length > 0) {
-      console.log(`>---------------------------------------------\n 
-        POST /users  Ya existe users ${email}, ${name}\nPOST /checket `, checkResult.rows[0], 
-        "\n-------------------------------------<");
-      
-        return res.status(409).json({ error: `El usuario ya EXISTE ${email}, ${name}` });
+      console.log(
+        `>---------------------------------------------\n 
+        POST /users  Ya existe users ${email}, ${name}\nPOST /checket `,
+        checkResult.rows[0],
+        "\n-------------------------------------<"
+      );
+
+      return res
+        .status(409)
+        .json({ error: `El usuario ya EXISTE ${email}, ${name}` });
     }
     //* -------------------------------------------------------------------------< */
-    
 
     //* >------------------------------------------------------------------------- */
     //* * * * 1 Post users, donde se crea el usuario si es q no existe  {Grace Hopper, newUser@test.com}, El error q se encontraba esta en el test CREATED -> Created
@@ -323,17 +556,19 @@ app.post('/users', async (req:Request, res:Response)=>{
                VALUES ('${name}', '${email}', '${password}')
                RETURNING id, name, email;`;
 
-      const result = await client.query(query);
-      console.log("\n 1 POST >>-----------------------------------------\n Usuario No existe Ya insertado:", result.rows[0]), "\n-------------------------------<<\n";
-      res.status(201).json(result.rows[0]);
+    const result = await client.query(query);
+    console.log(
+      "\n 1 POST >>-----------------------------------------\n Usuario No existe Ya insertado:",
+      result.rows[0]
+    ),
+      "\n-------------------------------<<\n";
+    res.status(201).json(result.rows[0]);
     //* -------------------------------------------------------------------------< */
-
-  }catch(err){
+  } catch (err) {
     console.log("❌ Error en el servidor", err);
     res.status(500).json({ error: "Error en el servidor" });
   }
-
-})
+});
 // * -------------------------------------------------------------------------- */
 // * -------------------------------------------------------------------------- */
 
@@ -360,23 +595,26 @@ app.patch("/users/:id", async (req: Request, res: Response) => {
   //* -------------------------------------------------------------------------- */
   //* 3 PATCH users - no body ✅
   if (!req.body || Object.keys(req.body).length === 0) {
-    console.log('Cuerpo de la solicitud ausente o vacío');
-    return res.status(400).json({ error: "El cuerpo de la solicitud está vacío. Se necesita al menos un campo para actualizar: name o email." });
+    console.log("Cuerpo de la solicitud ausente o vacío");
+    return res
+      .status(400)
+      .json({
+        error:
+          "El cuerpo de la solicitud está vacío. Se necesita al menos un campo para actualizar: name o email.",
+      });
   }
   //* -------------------------------------------------------------------------- */
 
   let query = "";
 
-  // Si name y email no estan 
+  // Si name y email no estan
   if (!name && !email) {
-    return res
-      .status(400)
-      .json({
-        error: "Se necesita al menos un campo para actualizar: name o email",
-      });
+    return res.status(400).json({
+      error: "Se necesita al menos un campo para actualizar: name o email",
+    });
   }
   // Si los estan, entonces query actilizara los dos
-  if (name && email) {  
+  if (name && email) {
     query = `UPDATE users SET name= '${name}', email= '${email}' WHERE id = ${userId}
     RETURNING id, name, email;`;
   }
@@ -393,7 +631,6 @@ app.patch("/users/:id", async (req: Request, res: Response) => {
   //* 4 Patch users - email or password ✅
   if (!name && email) {
     return res.status(400).json({ error: "Cannot update email directly" });
-
   }
   //* -------------------------------------------------------------------------- */
 
@@ -416,6 +653,8 @@ app.patch("/users/:id", async (req: Request, res: Response) => {
 });
 //* -------------------------------------------------------------------------- */
 //* -------------------------------------------------------------------------- */
+
+
 
 
 
@@ -458,6 +697,38 @@ app.delete("/users/:identidicador", async (req: Request, res: Response) => {
 
 
 
+//* -------------------------------------------------------------------------- */
+//* ----------------------------- GET USER POR ID ---------------------------- */
+//* -------------------------------------------------------------------------- */
+  app.get( '/usersExist', async(req:Request, res:Response)=>{
+    const id = req.query.id;
+
+    let query = `SELECT * FROM users WHERE id = ${id}`
+
+    try{
+
+      console.log('userExist query',query);
+      const response = await client.query(query)
+      res.json(response.rows)
+    }catch(err){
+      console.error("Error :", err);
+
+    }
+
+
+
+  })
+//* -------------------------------------------------------------------------- */
+
+
+
+
+
+
+
+
+
+
 /* -------------------------------------------------------------------------- */
 // // INSERTAR USUARIOS
 // const insertUser = async (name: string, email: string, password: string) => {
@@ -470,7 +741,7 @@ app.delete("/users/:identidicador", async (req: Request, res: Response) => {
 //     console.log(">> ", password);
 //     console.log(">> ", hashPassword);
 //     //Insertar usuario
-//     const query = `INSERT INTO users (name, email, password) 
+//     const query = `INSERT INTO users (name, email, password)
 //     VALUES ('${name}', '${email}', '${hashPassword}');`;
 //     console.log(">> ", query);
 //     return query;
@@ -479,7 +750,6 @@ app.delete("/users/:identidicador", async (req: Request, res: Response) => {
 //   }
 // };
 // // insertUser('Uno','uno@gmail.com','unopoassword')
-
 
 // /* -------------------------------------------------------------------------- */
 // /* -------------------------------------------------------------------------- */
@@ -542,18 +812,44 @@ app.delete("/users/:identidicador", async (req: Request, res: Response) => {
 // // });
 // /* -------------------------------------------------------------------------- */
 
-
-
-
+//* -------------------------------------------------------------------------- */
+//* -------------------------------------------------------------------------- */
+//* * * *  GET no-existent route  - no esixte la ruta taxisss
 // Middleware para manejar rutas no existentes
 app.use((req: Request, res: Response) => {
-  res.status(404).json({ error: 'Route not found' });
+  res.status(404).json({ error: "Route not found" });
 });
+//* -------------------------------------------------------------------------- */
+//* -------------------------------------------------------------------------- */
 
 app.listen(PORT, () => {
   console.log(`Servidor en funcionamiento en el puerto ${PORT}`);
 });
 
-
 // Probando el USERS / POST
 
+// Mostrar en e lfont
+
+// const getUsers = async (event) => {
+//   event.preventDefault();
+//   const limit = event.target.limit.value;
+
+//   console.log(`Enviando solicitud a: http://localhost:666/users?limit=${limit}`);
+
+//   try {
+//     const response = await fetch(`http://localhost:666/users?limit=${limit}`);
+//     console.log("Respuesta del servidor:", response);
+
+//     if (!response.ok) {
+//       throw new Error(`Error HTTP: ${response.status}`);
+//     }
+//     const data = await response.json();
+//     console.log("Datos obtenidos:", data);
+
+//     setUsers(data); // Guardar usuarios en el estado
+//     setError(null); // Limpiar errores previos
+//   } catch (err) {
+//     console.error("Error al obtener usuarios:", err);
+//     setError("Hubo un problema al cargar los usuarios.");
+//   }
+// };
